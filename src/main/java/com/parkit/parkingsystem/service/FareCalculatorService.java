@@ -5,6 +5,9 @@ import com.parkit.parkingsystem.model.Ticket;
 
 public class FareCalculatorService {
 
+    /**
+     * @param ticket
+     */
     public void calculateFare(Ticket ticket) {
         if (ticket.getOutTime() == null || ticket.getInTime() == null) {
             throw new IllegalArgumentException("In time or Out time is null");
@@ -22,8 +25,10 @@ public class FareCalculatorService {
         // Conversion en heures
         double durationHours = (double) durationMillis / (1000 * 60 * 60);
 
-        if (durationHours <= 0) {
-            throw new IllegalArgumentException("Duration must be positive");
+        // Gratuité pour une durée inférieure à 30 minutes
+        if (durationHours < 0.5) {
+            ticket.setPrice(0.0);
+            return;
         }
 
         // Calcul du tarif
@@ -41,4 +46,3 @@ public class FareCalculatorService {
         }
     }
 }
-
