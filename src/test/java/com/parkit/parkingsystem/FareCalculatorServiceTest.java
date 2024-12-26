@@ -2,14 +2,24 @@ package com.parkit.parkingsystem;
 
 import com.parkit.parkingsystem.constants.Fare;
 import com.parkit.parkingsystem.constants.ParkingType;
+import com.parkit.parkingsystem.dao.ParkingSpotDAO;
+import com.parkit.parkingsystem.dao.TicketDAO;
 import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
 import com.parkit.parkingsystem.service.FareCalculatorService;
+import com.parkit.parkingsystem.util.InputReaderUtil;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Date;
 
@@ -17,6 +27,17 @@ public class FareCalculatorServiceTest {
 
     private static FareCalculatorService fareCalculatorService;
     private Ticket ticket;
+
+    @Mock
+    private TicketDAO ticketDAO;
+
+    @Mock
+    private ParkingSpotDAO parkingSpotDAO;
+
+    @Mock
+    private InputReaderUtil inputReaderUtil;
+
+    private ParkingService parkingService;
 
     @BeforeAll
     private static void setUp() {
@@ -26,6 +47,7 @@ public class FareCalculatorServiceTest {
     @BeforeEach
     private void setUpPerTest() {
         ticket = new Ticket();
+        parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
     }
 
     @Test
@@ -187,7 +209,6 @@ public class FareCalculatorServiceTest {
         fareCalculatorService.calculateFare(ticket);
         assertEquals(0.75 * Fare.CAR_RATE_PER_HOUR, ticket.getPrice(), 0.001);
     }
-    
 
     @Test
     public void calculateFareCarWithMoreThanADayParkingTime(){
@@ -203,4 +224,38 @@ public class FareCalculatorServiceTest {
         assertEquals( (24 * Fare.CAR_RATE_PER_HOUR) , ticket.getPrice());
     }
 
+    @Test
+    public void processExitingVehicleTest() throws Exception {
+        // Configuration des mocks
+        when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(true);
+        when(ticketDAO.getNbTicket(anyString())).thenReturn(2); // Simule un utilisateur récurrent
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+    
+        // Exécution de la méthode
+        parkingService.processExitingVehicle();
+    
+        // Vérifications
+        verify(ticketDAO, times(1)).updateTicket(any(Ticket.class)); // Mise à jour du ticket
+        verify(ticketDAO, times(1)).getNbTicket("ABCDEF"); // Vérifie le statut d'utilisateur récurrent
+        verify(inputReaderUtil, times(1)).readVehicleRegistrationNumber(); // Lecture de la plaque
+    }
+    
+
+    @Test
+    public void processExitingVehicleTestUnableToUpdateTicket() throws Exception {
+        when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(false); 
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+        parkingService.processExitingVehicle();
+        verify(ticketDAO, times(1)).updateTicket(any(Ticket.class));
+        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class)); 
+        verify(inputReaderUtil, times(1)).readVehicleRegistrationNumber(); 
+    }
+
+    @Test
+    public void processExitingVehicleTestThrowsException() throws Exception {
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenThrow(new Exception("Error reading registration number"));
+        parkingService.processExitingVehicle();
+        verify(ticketDAO, times(0)).updateTicket(any(Ticket.class)); 
+        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class)); 
+    }
 }
