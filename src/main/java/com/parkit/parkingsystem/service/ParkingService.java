@@ -15,16 +15,34 @@ public class ParkingService {
 
     private static final Logger logger = LogManager.getLogger("ParkingService");
 
-    private static FareCalculatorService fareCalculatorService = new FareCalculatorService();
+    // FareCalculatorService est déjà injecté
+    private final FareCalculatorService fareCalculatorService;
+    
+    private final InputReaderUtil inputReaderUtil;
+    private final ParkingSpotDAO parkingSpotDAO;
+    private final TicketDAO ticketDAO;
 
-    private InputReaderUtil inputReaderUtil;
-    private ParkingSpotDAO parkingSpotDAO;
-    private  TicketDAO ticketDAO;
+    public static class PriceCalculator {
+        public double calculatePrice(Date inTime, Date outTime, double hourlyRate) {
+            if (inTime == null || outTime == null || hourlyRate <= 0) {
+                throw new IllegalArgumentException("Invalid input for price calculation");
+            }
 
-    public ParkingService(InputReaderUtil inputReaderUtil, ParkingSpotDAO parkingSpotDAO, TicketDAO ticketDAO){
+            long durationInMillis = outTime.getTime() - inTime.getTime();
+            if (durationInMillis <= 0) {
+                return 0;
+            }
+
+            double durationInHours = durationInMillis / (1000.0 * 60 * 60);
+            return Math.ceil(durationInHours) * hourlyRate;
+        }
+    }
+    
+    public ParkingService(InputReaderUtil inputReaderUtil, ParkingSpotDAO parkingSpotDAO, TicketDAO ticketDAO, FareCalculatorService fareCalculatorService) {
         this.inputReaderUtil = inputReaderUtil;
         this.parkingSpotDAO = parkingSpotDAO;
         this.ticketDAO = ticketDAO;
+        this.fareCalculatorService = fareCalculatorService;
     }
 
     public void processIncomingVehicle() {
@@ -98,23 +116,45 @@ public class ParkingService {
     }
 
     public void processExitingVehicle() {
-        try{
-            String vehicleRegNumber = getVehichleRegNumber();
+        try {
+            String vehicleRegNumber = inputReaderUtil.readVehicleRegistrationNumber();
+    
             Ticket ticket = ticketDAO.getTicket(vehicleRegNumber);
+            if (ticket == null) {
+                System.out.println("No ticket found for vehicle registration number: " + vehicleRegNumber);
+                return;
+            }
+    
+            // Définir l'heure de sortie
             Date outTime = new Date();
             ticket.setOutTime(outTime);
-            fareCalculatorService.calculateFare(ticket);
-            if(ticketDAO.updateTicket(ticket)) {
-                ParkingSpot parkingSpot = ticket.getParkingSpot();
-                parkingSpot.setAvailable(true);
-                parkingSpotDAO.updateParking(parkingSpot);
-                System.out.println("Please pay the parking fare:" + ticket.getPrice());
-                System.out.println("Recorded out-time for vehicle number:" + ticket.getVehicleRegNumber() + " is:" + outTime);
-            }else{
-                System.out.println("Unable to update ticket information. Error occurred");
+    
+            // Vérifiez que outTime est défini
+            if (ticket.getOutTime() == null) {
+                System.out.println("Failed to set out time for vehicle: " + vehicleRegNumber);
+                return;
             }
-        }catch(Exception e){
-            logger.error("Unable to process exiting vehicle",e);
+    
+            // Calculer le tarif
+            int nbTickets = ticketDAO.getNbTicket(vehicleRegNumber);
+            boolean isRecurringUser = nbTickets > 1;
+            fareCalculatorService.calculateFare(ticket, isRecurringUser);
+    
+            // Mise à jour du ticket dans la base de données
+            if (!ticketDAO.updateTicket(ticket)) {
+                System.out.println("Failed to update ticket in the database.");
+                return;
+            }
+    
+            // Libérer la place de parking
+            ParkingSpot parkingSpot = ticket.getParkingSpot();
+            parkingSpot.setAvailable(true);
+            parkingSpotDAO.updateParking(parkingSpot);
+    
+            System.out.println("Vehicle exited successfully. Total fare: " + ticket.getPrice());
+        } catch (Exception e) {
+            System.out.println("Unable to process exiting vehicle: " + e.getMessage());
         }
     }
+    
 }

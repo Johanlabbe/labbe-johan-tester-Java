@@ -1,30 +1,39 @@
 package com.parkit.parkingsystem.integration.service;
 
+import com.parkit.parkingsystem.config.DataBaseConfig;
 import com.parkit.parkingsystem.integration.config.DataBaseTestConfig;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
+import java.sql.Statement;
 
 public class DataBasePrepareService {
 
-    DataBaseTestConfig dataBaseTestConfig = new DataBaseTestConfig();
+    private static final Logger logger = LogManager.getLogger(DataBasePrepareService.class);
 
-    public void clearDataBaseEntries(){
-        Connection connection = null;
-        try{
-            connection = dataBaseTestConfig.getConnection();
+    // Utilisation de DataBaseTestConfig pour les tests
+    private final DataBaseConfig dataBaseConfig;
 
-            //set parking entries to available
-            connection.prepareStatement("update parking set available = true").execute();
-
-            //clear ticket entries;
-            connection.prepareStatement("truncate table ticket").execute();
-
-        }catch(Exception e){
-            e.printStackTrace();
-        }finally {
-            dataBaseTestConfig.closeConnection(connection);
-        }
+    /**
+     * Constructeur pour injecter la configuration de la base de données.
+     * Par défaut, utilise DataBaseTestConfig.
+     */
+    public DataBasePrepareService() {
+        this.dataBaseConfig = new DataBaseTestConfig();
     }
 
-
+    /**
+     * Efface les entrées de la base de données pour préparer un état initial.
+     */
+    public void clearDataBaseEntries() {
+        try (Connection con = dataBaseConfig.getConnection();
+             Statement stmt = con.createStatement()) {
+            stmt.executeUpdate("TRUNCATE TABLE ticket");
+            stmt.executeUpdate("UPDATE parking SET available = true");
+            logger.info("Database entries cleared.");
+        } catch (Exception ex) {
+            logger.error("Error clearing database entries: ", ex);
+        }
+    }
 }

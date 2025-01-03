@@ -5,115 +5,123 @@ import com.parkit.parkingsystem.constants.DBConstants;
 import com.parkit.parkingsystem.constants.ParkingType;
 import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
+import com.parkit.parkingsystem.service.ParkingService.PriceCalculator;
+
 import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.parkit.parkingsystem.constants.ParkingType;
 
 public class TicketDAO {
 
-    private static final Logger logger = LogManager.getLogger("TicketDAO");
+    private static final Logger logger = LoggerFactory.getLogger(TicketDAO.class);
+    public DataBaseConfig dataBaseConfig;
 
-    public DataBaseConfig dataBaseConfig = new DataBaseConfig();
-
-    /**
-     * Enregistre un ticket dans la base de données.
-     *
-     * @param ticket le ticket à sauvegarder
-     * @return true si le ticket est sauvegardé avec succès, false sinon
-     */
     public boolean saveTicket(Ticket ticket) {
-        try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(DBConstants.SAVE_TICKET)) {
-
+        int result = 0;
+        try (
+            Connection con = dataBaseConfig.getConnection();
+            PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO ticket (PARKING_NUMBER, VEHICLE_REG_NUMBER, PRICE, IN_TIME, OUT_TIME) VALUES (?, ?, ?, ?, ?)"
+            )
+        ) {
             ps.setInt(1, ticket.getParkingSpot().getId());
             ps.setString(2, ticket.getVehicleRegNumber());
             ps.setDouble(3, ticket.getPrice());
-            ps.setTimestamp(4, new Timestamp(ticket.getInTime().getTime()));
-            ps.setTimestamp(5, (ticket.getOutTime() == null) ? null : new Timestamp(ticket.getOutTime().getTime()));
-
-            ps.execute();
-            return true;
-
+            ps.setTimestamp(4, new java.sql.Timestamp(ticket.getInTime().getTime()));
+            ps.setTimestamp(5, ticket.getOutTime() != null ? new java.sql.Timestamp(ticket.getOutTime().getTime()) : null);
+    
+            result = ps.executeUpdate();
+            logger.info("Ticket successfully saved for vehicle: {}", ticket.getVehicleRegNumber());
+            con.commit(); // Validation explicite de la transaction
         } catch (Exception ex) {
-            logger.error("Error saving ticket", ex);
+            logger.error("Error saving ticket for vehicle: {}", ticket.getVehicleRegNumber(), ex);
         }
-        return false;
-    }
+        return result > 0;
+    }    
 
-    /**
-     * Récupère un ticket depuis la base de données en fonction du numéro de plaque.
-     *
-     * @param vehicleRegNumber le numéro de plaque
-     * @return le ticket correspondant ou null si aucun n'est trouvé
-     */
     public Ticket getTicket(String vehicleRegNumber) {
         Ticket ticket = null;
-
-        try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(DBConstants.GET_TICKET)) {
-
+        try (
+            Connection con = dataBaseConfig.getConnection();
+            PreparedStatement ps = con.prepareStatement(
+                "SELECT t.ID, t.PARKING_NUMBER, t.PRICE, t.IN_TIME, t.OUT_TIME, p.TYPE " +
+                "FROM ticket t " +
+                "INNER JOIN parking p ON p.PARKING_NUMBER = t.PARKING_NUMBER " +
+                "WHERE t.VEHICLE_REG_NUMBER = ? " +
+                "ORDER BY t.IN_TIME DESC LIMIT 1"
+            )
+        ) {
             ps.setString(1, vehicleRegNumber);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    ticket = new Ticket();
-                    ParkingSpot parkingSpot = new ParkingSpot(
-                            rs.getInt(1),
-                            ParkingType.valueOf(rs.getString(6)),
-                            false
-                    );
-                    ticket.setParkingSpot(parkingSpot);
-                    ticket.setId(rs.getInt(2));
-                    ticket.setVehicleRegNumber(vehicleRegNumber);
-                    ticket.setPrice(rs.getDouble(3));
-                    ticket.setInTime(rs.getTimestamp(4));
-                    ticket.setOutTime(rs.getTimestamp(5));
+                    ticket = mapResultSetToTicket(rs, vehicleRegNumber);
+                    logger.info("Ticket successfully retrieved for vehicle: {}", vehicleRegNumber);
+                } else {
+                    logger.warn("No ticket found for vehicle: {}", vehicleRegNumber);
                 }
             }
         } catch (Exception ex) {
-            logger.error("Error fetching ticket", ex);
+            logger.error("Error retrieving ticket for vehicle: {}", vehicleRegNumber, ex);
         }
         return ticket;
     }
 
-    /**
-     * Met à jour un ticket dans la base de données.
-     *
-     * @param ticket le ticket à mettre à jour
-     * @return true si la mise à jour réussit, false sinon
-     */
+    private Ticket mapResultSetToTicket(ResultSet rs, String vehicleRegNumber) throws SQLException {
+        Ticket ticket = new Ticket();
+        ticket.setId(rs.getInt("ID"));
+        ParkingSpot parkingSpot = new ParkingSpot(
+            rs.getInt("PARKING_NUMBER"),
+            ParkingType.valueOf(rs.getString("TYPE").toUpperCase()),
+            false
+        );
+        ticket.setParkingSpot(parkingSpot);
+        ticket.setVehicleRegNumber(vehicleRegNumber);
+        ticket.setPrice(rs.getDouble("PRICE"));
+        ticket.setInTime(rs.getTimestamp("IN_TIME"));
+        ticket.setOutTime(rs.getTimestamp("OUT_TIME"));
+        return ticket;
+    }
+
     public boolean updateTicket(Ticket ticket) {
-        try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(DBConstants.UPDATE_TICKET)) {
+        try (
+            Connection con = dataBaseConfig.getConnection();
+            PreparedStatement ps = con.prepareStatement(
+                "UPDATE ticket SET PRICE = ?, OUT_TIME = ? WHERE ID = ?"
+            )
+        ) {
+            PriceCalculator calculator = new PriceCalculator();
+            double price = calculator.calculatePrice(ticket.getInTime(), ticket.getOutTime(), 2.5); // Exemple : tarif horaire = 2.5
+            ticket.setPrice(price);
 
             ps.setDouble(1, ticket.getPrice());
             ps.setTimestamp(2, new Timestamp(ticket.getOutTime().getTime()));
             ps.setInt(3, ticket.getId());
 
-            ps.execute();
-            return true;
-
+            int result = ps.executeUpdate();
+            return result > 0;
         } catch (Exception ex) {
-            logger.error("Error updating ticket info", ex);
+            logger.error("Error updating ticket", ex);
+            return false;
         }
-        return false;
     }
 
-    /**
-     * Récupère le nombre de tickets associés à un numéro de plaque.
-     *
-     * @param vehicleRegNumber le numéro de plaque
-     * @return le nombre de tickets associés
-     */
     public int getNbTicket(String vehicleRegNumber) {
         int ticketCount = 0;
-
-        try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement("SELECT COUNT(*) FROM ticket WHERE VEHICLE_REG_NUMBER = ?")) {
-
+        try (
+            Connection con = dataBaseConfig.getConnection();
+            PreparedStatement ps = con.prepareStatement(
+                "SELECT COUNT(*) FROM ticket WHERE VEHICLE_REG_NUMBER = ?"
+            )
+        ) {
             ps.setString(1, vehicleRegNumber);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -121,7 +129,7 @@ public class TicketDAO {
                 }
             }
         } catch (Exception ex) {
-            logger.error("Error fetching ticket count for vehicle: " + vehicleRegNumber, ex);
+            logger.error("Error counting tickets for vehicle: {}", vehicleRegNumber, ex);
         }
         return ticketCount;
     }

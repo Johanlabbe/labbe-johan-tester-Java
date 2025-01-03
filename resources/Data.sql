@@ -1,3 +1,4 @@
+-- Active: 1682146058739@@127.0.0.1@3306
 /* Setting up PROD DB */
 create database prod;
 use prod;

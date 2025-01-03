@@ -7,25 +7,31 @@ import com.parkit.parkingsystem.dao.TicketDAO;
 import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
 import com.parkit.parkingsystem.service.FareCalculatorService;
+import com.parkit.parkingsystem.service.ParkingService.PriceCalculator;
 import com.parkit.parkingsystem.util.InputReaderUtil;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Calendar;
+import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-import java.util.Date;
-
+@ExtendWith(MockitoExtension.class)
 public class FareCalculatorServiceTest {
 
-    private static FareCalculatorService fareCalculatorService;
+    @InjectMocks
+    private FareCalculatorService fareCalculatorService;
+
     private Ticket ticket;
 
     @Mock
@@ -37,44 +43,69 @@ public class FareCalculatorServiceTest {
     @Mock
     private InputReaderUtil inputReaderUtil;
 
+    @InjectMocks
     private ParkingService parkingService;
 
     @BeforeAll
-    private static void setUp() {
-        fareCalculatorService = new FareCalculatorService();
+    public static void setUpClass() {
+        System.out.println("Starting tests for FareCalculatorService");
     }
 
-    @BeforeEach
-    private void setUpPerTest() {
-        ticket = new Ticket();
-        parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
+@BeforeEach
+public void setUpPerTest() throws Exception {
+    ticket = new Ticket();
+    ParkingSpot parkingSpot = new ParkingSpot(1, ParkingType.CAR, false);
+    ticket.setParkingSpot(parkingSpot);
+    ticket.setVehicleRegNumber("ABCDEF");
+    ticket.setInTime(new Date(System.currentTimeMillis() - (60 * 60 * 1000))); // 1 heure avant
+    ticket.setOutTime(new Date());
+
+    lenient().when(ticketDAO.getTicket("ABCDEF")).thenReturn(ticket);
+    lenient().when(ticketDAO.getNbTicket("ABCDEF")).thenReturn(2); // Simule un utilisateur régulier
+    lenient().when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(true);
+    lenient().when(parkingSpotDAO.updateParking(any(ParkingSpot.class))).thenReturn(true);
+    lenient().when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+}
+
+    @Test
+    public void testCalculatePrice() {
+        PriceCalculator calculator = new PriceCalculator();
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(2025, Calendar.JANUARY, 3, 10, 0);
+        Date inTime = calendar.getTime();
+        calendar.set(2025, Calendar.JANUARY, 3, 12, 30); // 2h30
+        Date outTime = calendar.getTime();
+
+        double price = calculator.calculatePrice(inTime, outTime, 2.5);
+        assertEquals(7.5, price, 0.01); // 2.5 * 3 (arrondi supérieur)
     }
 
     @Test
-    public void calculateFareCar(){
-        Date inTime = new Date();
-        inTime.setTime(System.currentTimeMillis() - (60 * 60 * 1000));
+    public void calculateFareCar() {
+        Date inTime = new Date(System.currentTimeMillis() - (60 * 60 * 1000));
         Date outTime = new Date();
         ParkingSpot parkingSpot = new ParkingSpot(1, ParkingType.CAR, false);
-    
+
         ticket.setInTime(inTime);
         ticket.setOutTime(outTime);
         ticket.setParkingSpot(parkingSpot);
         fareCalculatorService.calculateFare(ticket);
+
         assertEquals(Fare.CAR_RATE_PER_HOUR, ticket.getPrice(), 0.001);
     }
-    
+
     @Test
-    public void calculateFareBike(){
-        Date inTime = new Date();
-        inTime.setTime(System.currentTimeMillis() - (60 * 60 * 1000));
+    public void calculateFareBike() {
+        Date inTime = new Date(System.currentTimeMillis() - (60 * 60 * 1000));
         Date outTime = new Date();
         ParkingSpot parkingSpot = new ParkingSpot(1, ParkingType.BIKE, false);
-    
+
         ticket.setInTime(inTime);
         ticket.setOutTime(outTime);
         ticket.setParkingSpot(parkingSpot);
         fareCalculatorService.calculateFare(ticket);
+
         assertEquals(Fare.BIKE_RATE_PER_HOUR, ticket.getPrice(), 0.001);
     }
 
@@ -116,10 +147,8 @@ public class FareCalculatorServiceTest {
         ticket.setOutTime(outTime);
         ticket.setParkingSpot(parkingSpot);
 
-        // Calculer le tarif
         fareCalculatorService.calculateFare(ticket);
 
-        // Vérifier que le tarif est 0
         assertEquals(0.0, ticket.getPrice(), 0.001);
     }
 
@@ -135,10 +164,8 @@ public class FareCalculatorServiceTest {
         ticket.setOutTime(outTime);
         ticket.setParkingSpot(parkingSpot);
 
-        // Calculer le tarif
         fareCalculatorService.calculateFare(ticket);
 
-        // Vérifier que le tarif est 0
         assertEquals(0.0, ticket.getPrice(), 0.001);
     }
 
@@ -154,10 +181,8 @@ public class FareCalculatorServiceTest {
         ticket.setOutTime(outTime);
         ticket.setParkingSpot(parkingSpot);
 
-        // Calculer le tarif avec la remise
         fareCalculatorService.calculateFare(ticket, true);
 
-        // Vérifier que le tarif est 95% du tarif normal
         double expectedPrice = 0.95 * Fare.CAR_RATE_PER_HOUR;
         assertEquals(expectedPrice, ticket.getPrice(), 0.001);
     }
@@ -226,36 +251,35 @@ public class FareCalculatorServiceTest {
 
     @Test
     public void processExitingVehicleTest() throws Exception {
-        // Configuration des mocks
+        when(ticketDAO.getTicket("ABCDEF")).thenReturn(ticket);
+        when(ticketDAO.getNbTicket("ABCDEF")).thenReturn(2); // Utilisateur régulier
         when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(true);
-        when(ticketDAO.getNbTicket(anyString())).thenReturn(2); // Simule un utilisateur récurrent
         when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
     
-        // Exécution de la méthode
         parkingService.processExitingVehicle();
     
-        // Vérifications
-        verify(ticketDAO, times(1)).updateTicket(any(Ticket.class)); // Mise à jour du ticket
-        verify(ticketDAO, times(1)).getNbTicket("ABCDEF"); // Vérifie le statut d'utilisateur récurrent
-        verify(inputReaderUtil, times(1)).readVehicleRegistrationNumber(); // Lecture de la plaque
+        verify(ticketDAO, times(1)).getTicket("ABCDEF");
+        verify(ticketDAO, times(1)).getNbTicket("ABCDEF"); // Vérifie que getNbTicket est bien appelé
+        verify(ticketDAO, times(1)).updateTicket(any(Ticket.class));
+        verify(parkingSpotDAO, times(1)).updateParking(any(ParkingSpot.class));
     }
     
-
     @Test
     public void processExitingVehicleTestUnableToUpdateTicket() throws Exception {
-        when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(false); 
-        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+        when(ticketDAO.updateTicket(any(Ticket.class))).thenReturn(false);
         parkingService.processExitingVehicle();
+
         verify(ticketDAO, times(1)).updateTicket(any(Ticket.class));
-        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class)); 
-        verify(inputReaderUtil, times(1)).readVehicleRegistrationNumber(); 
+        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class));
+        verify(inputReaderUtil, times(1)).readVehicleRegistrationNumber();
     }
 
     @Test
     public void processExitingVehicleTestThrowsException() throws Exception {
         when(inputReaderUtil.readVehicleRegistrationNumber()).thenThrow(new Exception("Error reading registration number"));
         parkingService.processExitingVehicle();
-        verify(ticketDAO, times(0)).updateTicket(any(Ticket.class)); 
-        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class)); 
+
+        verify(ticketDAO, times(0)).updateTicket(any(Ticket.class));
+        verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class));
     }
 }
