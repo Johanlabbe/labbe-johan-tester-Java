@@ -1,8 +1,13 @@
 package com.parkit.parkingsystem.service;
 
+import com.parkit.parkingsystem.config.DataBaseConfig;
 import com.parkit.parkingsystem.dao.ParkingSpotDAO;
 import com.parkit.parkingsystem.dao.TicketDAO;
+import com.parkit.parkingsystem.service.ParkingService.PriceCalculator;
 import com.parkit.parkingsystem.util.InputReaderUtil;
+
+import java.util.Date;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -10,14 +15,14 @@ public class InteractiveShell {
 
     private static final Logger logger = LogManager.getLogger("InteractiveShell");
 
-    public static void loadInterface(){
+    public static void loadInterface() throws Exception{
         logger.info("App initialized!!!");
         System.out.println("Welcome to Parking System!");
 
         boolean continueApp = true;
         InputReaderUtil inputReaderUtil = new InputReaderUtil();
-        ParkingSpotDAO parkingSpotDAO = new ParkingSpotDAO();
-        TicketDAO ticketDAO = new TicketDAO();
+        ParkingSpotDAO parkingSpotDAO = new ParkingSpotDAO(new DataBaseConfig());
+        TicketDAO ticketDAO = new TicketDAO(new PriceCalculator());
         ParkingService parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO, new FareCalculatorService());
 
         while(continueApp){
@@ -29,7 +34,7 @@ public class InteractiveShell {
                     break;
                 }
                 case 2: {
-                    parkingService.processExitingVehicle();
+                    parkingService.processExitingVehicle(new Date());
                     break;
                 }
                 case 3: {

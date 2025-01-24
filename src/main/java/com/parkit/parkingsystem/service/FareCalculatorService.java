@@ -1,56 +1,69 @@
 package com.parkit.parkingsystem.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.parkit.parkingsystem.constants.Fare;
+import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
 
 public class FareCalculatorService {
-
-    // Nouvelle méthode avec deux paramètres
+    private static final Logger logger = LoggerFactory.getLogger(FareCalculatorService.class);
+    
     public void calculateFare(Ticket ticket, boolean discount) {
-        if (ticket.getOutTime() == null || ticket.getInTime() == null) {
+        if (ticket == null) {
+            throw new IllegalArgumentException("Ticket is null");
+        }
+
+        if (ticket.getInTime() == null || ticket.getOutTime() == null) {
             throw new IllegalArgumentException("In time or Out time is null");
         }
-    
+
         if (ticket.getOutTime().before(ticket.getInTime())) {
-            throw new IllegalArgumentException("Out time provided is incorrect: " + ticket.getOutTime());
+            throw new IllegalArgumentException("Out time is before In time");
         }
-    
-        // Calcul de la durée en heures
+
+        ParkingSpot parkingSpot = ticket.getParkingSpot();
+        if (parkingSpot == null || parkingSpot.getParkingType() == null) {
+            throw new IllegalArgumentException("Unknown Parking Type");
+        }
+
         long durationInMillis = ticket.getOutTime().getTime() - ticket.getInTime().getTime();
         double durationHours = durationInMillis / (1000.0 * 60 * 60);
-    
-        // Gratuité pour une durée inférieure à 30 minutes
+        logger.debug("Duration in hours for vehicle {}: {}", ticket.getVehicleRegNumber(), durationHours);
+
         if (durationHours < 0.5) {
             ticket.setPrice(0.0);
+            logger.info("Duration is less than 30 minutes, parking is free.");
             return;
         }
-    
-        // Sélection du tarif en fonction du type de parking
-        double price = 0.0;
-        switch (ticket.getParkingSpot().getParkingType()) {
+
+        double ratePerHour;
+        switch (parkingSpot.getParkingType()) {
             case CAR:
-                price = durationHours * Fare.CAR_RATE_PER_HOUR;
+                ratePerHour = Fare.CAR_RATE_PER_HOUR;
                 break;
             case BIKE:
-                price = durationHours * Fare.BIKE_RATE_PER_HOUR;
+                ratePerHour = Fare.BIKE_RATE_PER_HOUR;
                 break;
             default:
+                logger.warn("Unknown Parking Type: {}", parkingSpot.getParkingType());
                 throw new IllegalArgumentException("Unknown Parking Type");
         }
-    
-        // Appliquer la réduction si applicable
+
+        double price = durationHours * ratePerHour;
+
         if (discount) {
             price *= 0.95; // Réduction de 5 %
+            logger.info("Discount applied: 5% for recurring user");
         }
-    
-        // Arrondir à trois décimales
-        price = Math.round(price * 1000.0) / 1000.0;
-    
-        ticket.setPrice(price);
-    }    
 
-    // Ancienne méthode qui appelle la nouvelle avec discount = false
-    public void calculateFare(Ticket ticket) {
-        calculateFare(ticket, false);
+        price = BigDecimal.valueOf(price).setScale(2, RoundingMode.HALF_UP).doubleValue();
+
+        ticket.setPrice(price);
+        logger.info("Fare calculated: {} for vehicle {}", price, ticket.getVehicleRegNumber());
     }
 }
