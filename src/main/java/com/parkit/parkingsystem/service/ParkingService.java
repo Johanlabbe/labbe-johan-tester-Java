@@ -131,13 +131,13 @@ public class ParkingService {
             ticket.setOutTime(outTime);
     
             int nbTickets = ticketDAO.getNbTicket(vehicleRegNumber);
-            boolean isRecurringUser = nbTickets > 1;
+            boolean isRecurringUser = nbTickets >= 1;
             logger.info("Vehicle {} is a recurring user: {}", vehicleRegNumber, isRecurringUser);
     
             fareCalculatorService.calculateFare(ticket, isRecurringUser);
             logger.info("Calculated fare for vehicle {}: {}", vehicleRegNumber, ticket.getPrice());
     
-            if (ticket.getPrice() <= 0) {
+            if (ticket.getPrice() < 0) {
                 logger.error("Calculated fare is invalid for vehicle: {}", vehicleRegNumber);
                 return;
             }

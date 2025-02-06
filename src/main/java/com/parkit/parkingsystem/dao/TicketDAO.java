@@ -2,7 +2,6 @@ package com.parkit.parkingsystem.dao;
 
 import com.parkit.parkingsystem.config.DataBaseConfig;
 import com.parkit.parkingsystem.constants.ParkingType;
-// import com.parkit.parkingsystem.integration.config.DataBaseTestConfig;
 import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
 import com.parkit.parkingsystem.service.ParkingService.PriceCalculator;
@@ -104,9 +103,6 @@ public class TicketDAO {
         String sql = "UPDATE ticket SET PRICE = ?, OUT_TIME = ? WHERE ID = ?";
         try (Connection con = dataBaseConfig.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
-
-            double price = priceCalculator.calculatePrice(ticket.getInTime(), ticket.getOutTime(), 2.5);
-            ticket.setPrice(price);
 
             ps.setDouble(1, ticket.getPrice());
             ps.setTimestamp(2, new Timestamp(ticket.getOutTime().getTime()));

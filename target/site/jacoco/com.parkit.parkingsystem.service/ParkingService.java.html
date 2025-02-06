@@ -131,13 +131,13 @@ public class ParkingService {
 <span class="fc" id="L131">            ticket.setOutTime(outTime);</span>
     
 <span class="fc" id="L133">            int nbTickets = ticketDAO.getNbTicket(vehicleRegNumber);</span>
-<span class="pc bpc" id="L134" title="1 of 2 branches missed.">            boolean isRecurringUser = nbTickets &gt; 1;</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">            boolean isRecurringUser = nbTickets &gt;= 1;</span>
 <span class="fc" id="L135">            logger.info(&quot;Vehicle {} is a recurring user: {}&quot;, vehicleRegNumber, isRecurringUser);</span>
     
 <span class="fc" id="L137">            fareCalculatorService.calculateFare(ticket, isRecurringUser);</span>
 <span class="fc" id="L138">            logger.info(&quot;Calculated fare for vehicle {}: {}&quot;, vehicleRegNumber, ticket.getPrice());</span>
     
-<span class="pc bpc" id="L140" title="1 of 2 branches missed.">            if (ticket.getPrice() &lt;= 0) {</span>
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">            if (ticket.getPrice() &lt; 0) {</span>
 <span class="nc" id="L141">                logger.error(&quot;Calculated fare is invalid for vehicle: {}&quot;, vehicleRegNumber);</span>
 <span class="nc" id="L142">                return;</span>
             }

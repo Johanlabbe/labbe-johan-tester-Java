@@ -22,10 +22,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -294,5 +294,38 @@ public class FareCalculatorServiceTest {
 
         verify(ticketDAO, times(0)).updateTicket(any(Ticket.class));
         verify(parkingSpotDAO, times(0)).updateParking(any(ParkingSpot.class));
+    }
+
+    @Test
+    public void testCalculateFare_WithRecurringUserDiscount() {
+        Date inTime = new Date();
+        Date outTime = new Date(inTime.getTime() + TimeUnit.HOURS.toMillis(2));
+
+        ticket.setInTime(inTime);
+        ticket.setOutTime(outTime);
+
+        boolean discount = true;
+
+        fareCalculatorService.calculateFare(ticket, discount);
+
+        double expectedFare = 2 * Fare.CAR_RATE_PER_HOUR * 0.95; 
+        expectedFare = BigDecimal.valueOf(expectedFare).setScale(2, RoundingMode.HALF_UP).doubleValue();
+
+        assertEquals(expectedFare, ticket.getPrice(), "Le tarif avec réduction pour utilisateur récurrent est incorrect");
+    }
+
+    @Test
+    public void testCalculateFare_LessThan30Minutes_FreeParking() {
+        Date inTime = new Date();
+        Date outTime = new Date(inTime.getTime() + TimeUnit.MINUTES.toMillis(20));
+
+        ticket.setInTime(inTime);
+        ticket.setOutTime(outTime);
+
+        boolean isRecurringUser = false;
+
+        fareCalculatorService.calculateFare(ticket, isRecurringUser);
+
+        assertEquals(0.0, ticket.getPrice(), "Le tarif pour une durée < 30 minutes doit être gratuit");
     }
 }

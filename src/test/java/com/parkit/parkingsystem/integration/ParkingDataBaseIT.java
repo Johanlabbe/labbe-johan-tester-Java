@@ -159,6 +159,40 @@ public class ParkingDataBaseIT {
     }
 
     @Test
+    public void testParkingLotExitDurationUnder30Minutes() throws Exception {
+        ParkingSpotDAO realParkingSpotDAO = new ParkingSpotDAO(dataBaseTestConfig);
+        TicketDAO realTicketDAO = new TicketDAO(dataBaseTestConfig);
+        ParkingService parkingService = new ParkingService(inputReaderUtil, realParkingSpotDAO, realTicketDAO, new FareCalculatorService());
+    
+        dataBasePrepareService.clearDataBaseEntries();
+    
+        when(inputReaderUtil.readSelection()).thenReturn(1); // CAR
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+    
+        parkingService.processIncomingVehicle();
+    
+        Ticket ticket = realTicketDAO.getTicket("ABCDEF");
+        assertNotNull(ticket, "Ticket should be saved in the database.");
+        assertNotNull(ticket.getInTime(), "In-time should be set.");
+        assertNull(ticket.getOutTime(), "Out-time should not be set for an incoming vehicle.");
+    
+        ParkingSpot parkingSpot = realParkingSpotDAO.getParkingSpot(ticket.getParkingSpot().getId());
+        assertNotNull(parkingSpot, "Parking spot should not be null.");
+        assertFalse(parkingSpot.isAvailable(), "Parking spot should be marked as unavailable.");
+    
+        parkingService.processExitingVehicle(new Date(System.currentTimeMillis() + 29 * 60 * 1000)); // 29 Minutes
+    
+        Ticket updatedTicket = realTicketDAO.getTicket("ABCDEF");
+        assertNotNull(updatedTicket, "Updated ticket should not be null.");
+        assertNotNull(updatedTicket.getOutTime(), "Out-time should be set.");
+        assertTrue(updatedTicket.getPrice() == 0.0, "Price should be calculated.");
+    
+        ParkingSpot updatedParkingSpot = realParkingSpotDAO.getParkingSpot(updatedTicket.getParkingSpot().getId());
+        assertNotNull(updatedParkingSpot, "Parking spot should not be null.");
+        assertTrue(updatedParkingSpot.isAvailable(), "Parking spot should be marked as available after exit.");
+    }
+
+    @Test
     public void testExitingVehicleWithNoTicket() throws Exception {
         when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("NONEXISTENT");
         when(ticketDAO.getTicket(anyString())).thenThrow(new RuntimeException("No ticket found"));
