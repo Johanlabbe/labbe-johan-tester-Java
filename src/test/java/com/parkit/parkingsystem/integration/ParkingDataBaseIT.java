@@ -6,6 +6,7 @@ import com.parkit.parkingsystem.dao.ParkingSpotDAO;
 import com.parkit.parkingsystem.dao.TicketDAO;
 import com.parkit.parkingsystem.integration.config.DataBaseTestConfig;
 import com.parkit.parkingsystem.integration.service.DataBasePrepareService;
+import com.parkit.parkingsystem.integration.util.TestDatabaseUtils;
 import com.parkit.parkingsystem.model.ParkingSpot;
 import com.parkit.parkingsystem.model.Ticket;
 import com.parkit.parkingsystem.service.FareCalculatorService;
@@ -22,6 +23,9 @@ import org.mockito.MockitoAnnotations;
 // import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -190,6 +194,65 @@ public class ParkingDataBaseIT {
         ParkingSpot updatedParkingSpot = realParkingSpotDAO.getParkingSpot(updatedTicket.getParkingSpot().getId());
         assertNotNull(updatedParkingSpot, "Parking spot should not be null.");
         assertTrue(updatedParkingSpot.isAvailable(), "Parking spot should be marked as available after exit.");
+    }
+
+    @Test
+    public void testParkingLotExitRecurringUserWithDiscount() throws Exception {
+        ParkingSpotDAO realParkingSpotDAO = new ParkingSpotDAO(dataBaseTestConfig);
+        TicketDAO realTicketDAO = new TicketDAO(dataBaseTestConfig);
+        FareCalculatorService fareCalculatorService = new FareCalculatorService();
+        ParkingService parkingService = new ParkingService(inputReaderUtil, realParkingSpotDAO, realTicketDAO, fareCalculatorService);
+        TestDatabaseUtils testDatabaseUtils = new TestDatabaseUtils(dataBaseTestConfig);
+
+        dataBasePrepareService.clearDataBaseEntries();
+
+        when(inputReaderUtil.readSelection()).thenReturn(1); // CAR
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+
+        parkingService.processIncomingVehicle();
+
+        Ticket firstDayTicket = realTicketDAO.getTicket("ABCDEF");
+
+        testDatabaseUtils.verifyTicketInDatabase("ABCDEF");
+
+        System.out.println("Ticket premier jour avant sortie -> ID: " + firstDayTicket.getId() +
+                ", InTime: " + firstDayTicket.getInTime() + ", OutTime: " + firstDayTicket.getOutTime());
+
+        parkingService.processExitingVehicle(new Date(System.currentTimeMillis() + (60 * 60 * 1000))); // 1 heure plus tard
+
+        Thread.sleep(200);
+
+        Ticket updatedFirstDayTicket = realTicketDAO.getTicket("ABCDEF");
+
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+
+        parkingService.processIncomingVehicle();
+
+        Thread.sleep(200);
+
+        Ticket secondDayTicket = realTicketDAO.getTicket("ABCDEF");
+        assertNotNull(secondDayTicket, "Le deuxième ticket doit être enregistré.");
+        assertNotNull(secondDayTicket.getInTime(), "L'heure d'entrée du deuxième jour doit être définie.");
+        assertNull(secondDayTicket.getOutTime(), "L'heure de sortie ne doit pas être définie immédiatement après l'entrée.");
+
+        testDatabaseUtils.verifyTicketInDatabase("ABCDEF");
+
+        parkingService.processExitingVehicle(new Date(System.currentTimeMillis() + (60 * 60 * 1000))); // 1 heure plus tard
+
+        Thread.sleep(200);
+
+        Ticket updatedSecondDayTicket = realTicketDAO.getTicket("ABCDEF");
+        assertNotNull(updatedSecondDayTicket, "Le deuxième ticket mis à jour doit exister.");
+        assertNotNull(updatedSecondDayTicket.getOutTime(), "L'heure de sortie du deuxième jour doit être définie.");
+        assertTrue(updatedSecondDayTicket.getPrice() > 0, "Le prix doit être supérieur à 0.");
+        assertTrue(updatedSecondDayTicket.getPrice() < updatedFirstDayTicket.getPrice(), "Le prix du deuxième jour doit être réduit par rapport au premier jour.");
+
+        System.out.println("Ticket deuxième jour après sortie -> ID: " + updatedSecondDayTicket.getId() +
+                ", InTime: " + updatedSecondDayTicket.getInTime() + ", OutTime: " + updatedSecondDayTicket.getOutTime());
+
+        ParkingSpot updatedParkingSpot = realParkingSpotDAO.getParkingSpot(updatedSecondDayTicket.getParkingSpot().getId());
+        assertNotNull(updatedParkingSpot, "La place de parking doit être valide.");
+        assertTrue(updatedParkingSpot.isAvailable(), "La place de parking doit être libre après la sortie.");
     }
 
     @Test

@@ -57,31 +57,59 @@ public class TicketDAO {
 
     public Ticket getTicket(String vehicleRegNumber) {
         Ticket ticket = null;
-        String sql = "SELECT t.ID, t.PARKING_NUMBER, t.PRICE, t.IN_TIME, t.OUT_TIME, p.TYPE " +
-                     "FROM ticket t " +
-                     "INNER JOIN parking p ON p.PARKING_NUMBER = t.PARKING_NUMBER " +
-                     "WHERE t.VEHICLE_REG_NUMBER = ? " +
-                     "ORDER BY t.IN_TIME DESC LIMIT 1";
-        logger.debug("Retrieving ticket for vehicle: {}", vehicleRegNumber);
-
+    
+        String countQuery = "SELECT COUNT(*) FROM ticket WHERE VEHICLE_REG_NUMBER = ?";
+        boolean isRecurringUser = false;
+    
         try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            ps.setString(1, vehicleRegNumber);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    ticket = mapResultSetToTicket(rs, vehicleRegNumber);
-                    logger.debug("Ticket retrieved: {}", ticket);
-                } else {
-                    logger.warn("No ticket found for vehicle: {}", vehicleRegNumber);
+             PreparedStatement countPs = con.prepareStatement(countQuery)) {
+    
+            countPs.setString(1, vehicleRegNumber);
+            try (ResultSet rs = countPs.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 1) {
+                    isRecurringUser = true;
                 }
             }
         } catch (Exception ex) {
-            logger.error("Error retrieving ticket for vehicle: {}", vehicleRegNumber, ex);
+            logger.error("Error checking if user is recurring: {}", vehicleRegNumber, ex);
+        }
+    
+        String sql;
+        if (isRecurringUser) {
+            sql = "SELECT t.ID, t.PARKING_NUMBER, t.PRICE, t.IN_TIME, t.OUT_TIME, p.TYPE " +
+                  "FROM ticket t " +
+                  "INNER JOIN parking p ON p.PARKING_NUMBER = t.PARKING_NUMBER " +
+                  "WHERE t.VEHICLE_REG_NUMBER = ? " +
+                  "ORDER BY t.OUT_TIME IS NULL DESC, t.IN_TIME DESC LIMIT 1"; 
+        } else {
+            sql = "SELECT t.ID, t.PARKING_NUMBER, t.PRICE, t.IN_TIME, t.OUT_TIME, p.TYPE " +
+                  "FROM ticket t " +
+                  "INNER JOIN parking p ON p.PARKING_NUMBER = t.PARKING_NUMBER " +
+                  "WHERE t.VEHICLE_REG_NUMBER = ? " +
+                  "ORDER BY t.IN_TIME DESC LIMIT 1";
+        }
+    
+        logger.debug("Retrieving ticket for vehicle: {}, isRecurringUser: {}", vehicleRegNumber, isRecurringUser);
+    
+        try (Connection con = dataBaseConfig.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+    
+            ps.setString(1, vehicleRegNumber);
+    
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    ticket = mapResultSetToTicket(rs, vehicleRegNumber);
+                    logger.debug("Ticket récupéré -> ID: {}, InTime: {}, OutTime: {}",
+                            rs.getInt("ID"), rs.getTimestamp("IN_TIME"), rs.getTimestamp("OUT_TIME"));
+                } else {
+                    logger.warn("Aucun ticket trouvé pour le véhicule: {}", vehicleRegNumber);
+                }
+            }
+        } catch (Exception ex) {
+            logger.error("Erreur lors de la récupération du ticket: ", ex);
         }
         return ticket;
-    }
+    }    
 
     private Ticket mapResultSetToTicket(ResultSet rs, String vehicleRegNumber) throws SQLException {
         Ticket ticket = new Ticket();
@@ -100,22 +128,37 @@ public class TicketDAO {
     }
 
     public boolean updateTicket(Ticket ticket) {
+        if (ticket == null || ticket.getOutTime() == null || ticket.getId() <= 0) {
+            logger.error("Ticket invalide pour mise à jour: {}", ticket);
+            return false;
+        }
+    
         String sql = "UPDATE ticket SET PRICE = ?, OUT_TIME = ? WHERE ID = ?";
         try (Connection con = dataBaseConfig.getConnection();
+             PreparedStatement checkPs = con.prepareStatement("SELECT ID FROM ticket WHERE ID = ?");
              PreparedStatement ps = con.prepareStatement(sql)) {
-
+    
+            checkPs.setInt(1, ticket.getId());
+            try (ResultSet rs = checkPs.executeQuery()) {
+                if (!rs.next()) {
+                    logger.error("Ticket ID {} introuvable, impossible de mettre à jour.", ticket.getId());
+                    return false;
+                }
+            }
+    
             ps.setDouble(1, ticket.getPrice());
             ps.setTimestamp(2, new Timestamp(ticket.getOutTime().getTime()));
             ps.setInt(3, ticket.getId());
-
+    
             int result = ps.executeUpdate();
-            logger.debug("Update ticket result: {}", result);
+            logger.debug("Ticket ID {} mis à jour avec OutTime: {}, résultat: {}", ticket.getId(), ticket.getOutTime(), result);
             return result > 0;
+    
         } catch (Exception ex) {
-            logger.error("Error updating ticket", ex);
+            logger.error("Erreur lors de la mise à jour du ticket ID {}: {}", ticket.getId(), ex.getMessage());
             return false;
         }
-    }
+    }    
 
     public int getNbTicket(String vehicleRegNumber) {
         String sql = "SELECT COUNT(*) FROM ticket WHERE VEHICLE_REG_NUMBER = ?";

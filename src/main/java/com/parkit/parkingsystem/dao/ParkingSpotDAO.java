@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 
 public class ParkingSpotDAO {
     private static final Logger logger = LogManager.getLogger("ParkingSpotDAO");
@@ -77,34 +78,49 @@ public class ParkingSpotDAO {
     }
     
     /**
-     * Met à jour la disponibilité d'une place de parking.
-     * 
-     * @param parkingSpot L'objet ParkingSpot à mettre à jour
+     * Met à jour la disponibilité d'une place de parking dans la base de données.
+     *
+     * @param parkingSpot L'objet ParkingSpot à mettre à jour.
      * @return true si la mise à jour est réussie, false sinon.
      */
     public boolean updateParking(ParkingSpot parkingSpot) {
         if (parkingSpot == null) {
-            logger.error("ParkingSpot is null. Cannot update.");
+            logger.error("ParkingSpot est null. Impossible de mettre à jour.");
             return false;
         }
-    
+
+        if (parkingSpot.getId() <= 0) {
+            logger.error("ParkingSpot ID invalide: {}. Impossible de mettre à jour.", parkingSpot.getId());
+            return false;
+        }
+
+        String sql = DBConstants.UPDATE_PARKING_SPOT;
+
         try (Connection con = dataBaseConfig.getConnection();
-             PreparedStatement ps = con.prepareStatement(DBConstants.UPDATE_PARKING_SPOT)) {
+            PreparedStatement ps = con.prepareStatement(sql)) {
+
+            logger.debug("Mise à jour du parking -> ID: {}, Disponible: {}", parkingSpot.getId(), parkingSpot.isAvailable());
+
             ps.setBoolean(1, parkingSpot.isAvailable());
             ps.setInt(2, parkingSpot.getId());
+
             int updateRowCount = ps.executeUpdate();
+
             if (updateRowCount == 1) {
-                logger.info("Parking spot with ID: {} successfully updated to available: {}", parkingSpot.getId(), parkingSpot.isAvailable());
+                logger.info("Parking ID {} mis à jour avec succès. Disponible: {}", parkingSpot.getId(), parkingSpot.isAvailable());
                 return true;
             } else {
-                logger.warn("No parking spot updated for ID: {}", parkingSpot.getId());
+                logger.warn("Aucune ligne mise à jour pour le parking ID: {}", parkingSpot.getId());
                 return false;
             }
+        } catch (SQLException ex) {
+            logger.error("Erreur SQL lors de la mise à jour du parking ID {}: {}", parkingSpot.getId(), ex.getMessage(), ex);
+            return false;
         } catch (Exception ex) {
-            logger.error("Error updating parking spot with ID: {} to available: {}", parkingSpot.getId(), parkingSpot.isAvailable(), ex);
+            logger.error("Erreur inattendue lors de la mise à jour du parking ID {}: {}", parkingSpot.getId(), ex.getMessage(), ex);
             return false;
         }
-    }    
+    }
 
     /**
      * Vérifie si une place de parking est disponible.

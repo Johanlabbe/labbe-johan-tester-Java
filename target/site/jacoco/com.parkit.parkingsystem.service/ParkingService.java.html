@@ -131,7 +131,7 @@ public class ParkingService {
 <span class="fc" id="L131">            ticket.setOutTime(outTime);</span>
     
 <span class="fc" id="L133">            int nbTickets = ticketDAO.getNbTicket(vehicleRegNumber);</span>
-<span class="fc bfc" id="L134" title="All 2 branches covered.">            boolean isRecurringUser = nbTickets &gt;= 1;</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">            boolean isRecurringUser = nbTickets &gt; 1;</span>
 <span class="fc" id="L135">            logger.info(&quot;Vehicle {} is a recurring user: {}&quot;, vehicleRegNumber, isRecurringUser);</span>
     
 <span class="fc" id="L137">            fareCalculatorService.calculateFare(ticket, isRecurringUser);</span>
@@ -143,26 +143,28 @@ public class ParkingService {
             }
     
 <span class="fc" id="L145">            logger.info(&quot;Updating ticket for vehicle: {}&quot;, vehicleRegNumber);</span>
-<span class="fc bfc" id="L146" title="All 2 branches covered.">            if (!ticketDAO.updateTicket(ticket)) {</span>
-<span class="fc" id="L147">                logger.error(&quot;Failed to update ticket for vehicle: {}&quot;, vehicleRegNumber);</span>
-<span class="fc" id="L148">                return;</span>
+<span class="fc" id="L146">            boolean ticketUpdated = ticketDAO.updateTicket(ticket);</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">            if (!ticketUpdated) {</span>
+<span class="fc" id="L148">                logger.error(&quot;Failed to update ticket for vehicle: {}&quot;, vehicleRegNumber);</span>
+<span class="fc" id="L149">                return;</span>
             }
-<span class="fc" id="L150">            logger.info(&quot;Ticket updated successfully for vehicle: {}&quot;, vehicleRegNumber);</span>
+<span class="fc" id="L151">            logger.info(&quot;Ticket updated successfully for vehicle: {}&quot;, vehicleRegNumber);</span>
     
-<span class="fc" id="L152">            ParkingSpot parkingSpot = ticket.getParkingSpot();</span>
-<span class="fc" id="L153">            parkingSpot.setAvailable(true);</span>
+<span class="fc" id="L153">            ParkingSpot parkingSpot = ticket.getParkingSpot();</span>
+<span class="fc" id="L154">            parkingSpot.setAvailable(true);</span>
     
-<span class="fc" id="L155">            logger.info(&quot;Updating parking spot for spot ID: {}&quot;, parkingSpot.getId());</span>
-<span class="fc bfc" id="L156" title="All 2 branches covered.">            if (!parkingSpotDAO.updateParking(parkingSpot)) {</span>
-<span class="fc" id="L157">                logger.error(&quot;Failed to update parking spot for spot ID: {}&quot;, parkingSpot.getId());</span>
-<span class="fc" id="L158">                return;</span>
+<span class="fc" id="L156">            logger.info(&quot;Updating parking spot for spot ID: {}&quot;, parkingSpot.getId());</span>
+<span class="fc" id="L157">            boolean parkingUpdated = parkingSpotDAO.updateParking(parkingSpot);</span>
+<span class="fc bfc" id="L158" title="All 2 branches covered.">            if (!parkingUpdated) {</span>
+<span class="fc" id="L159">                logger.error(&quot;Failed to update parking spot for spot ID: {}&quot;, parkingSpot.getId());</span>
+<span class="fc" id="L160">                return;</span>
             }
     
-<span class="fc" id="L161">            logger.info(&quot;Vehicle {} exited successfully. Total fare: {}&quot;, vehicleRegNumber, ticket.getPrice());</span>
-<span class="fc" id="L162">        } catch (Exception e) {</span>
-<span class="fc" id="L163">            logger.error(&quot;Unable to process exiting vehicle due to an error: {}&quot;, e.getMessage(), e);</span>
-<span class="fc" id="L164">            throw e;</span>
-<span class="fc" id="L165">        }</span>
-<span class="fc" id="L166">    }</span>
+<span class="fc" id="L163">            logger.info(&quot;Vehicle {} exited successfully. Total fare: {}&quot;, vehicleRegNumber, ticket.getPrice());</span>
+<span class="fc" id="L164">        } catch (Exception e) {</span>
+<span class="fc" id="L165">            logger.error(&quot;Unable to process exiting vehicle due to an error: {}&quot;, e.getMessage(), e);</span>
+<span class="fc" id="L166">            throw e;</span>
+<span class="fc" id="L167">        }</span>
+<span class="fc" id="L168">    }</span>
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

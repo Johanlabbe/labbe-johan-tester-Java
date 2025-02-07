@@ -1,4 +1,5 @@
 com\parkit\parkingsystem\integration\ParkingDataBaseIT.class
+com\parkit\parkingsystem\integration\util\TestDatabaseUtils.class
 com\parkit\parkingsystem\FareCalculatorServiceTest.class
 com\parkit\parkingsystem\integration\service\DataBasePrepareService.class
 com\parkit\parkingsystem\ParkingService.class

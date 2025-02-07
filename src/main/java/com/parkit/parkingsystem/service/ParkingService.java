@@ -131,7 +131,7 @@ public class ParkingService {
             ticket.setOutTime(outTime);
     
             int nbTickets = ticketDAO.getNbTicket(vehicleRegNumber);
-            boolean isRecurringUser = nbTickets >= 1;
+            boolean isRecurringUser = nbTickets > 1;
             logger.info("Vehicle {} is a recurring user: {}", vehicleRegNumber, isRecurringUser);
     
             fareCalculatorService.calculateFare(ticket, isRecurringUser);
@@ -143,7 +143,8 @@ public class ParkingService {
             }
     
             logger.info("Updating ticket for vehicle: {}", vehicleRegNumber);
-            if (!ticketDAO.updateTicket(ticket)) {
+            boolean ticketUpdated = ticketDAO.updateTicket(ticket);
+            if (!ticketUpdated) {
                 logger.error("Failed to update ticket for vehicle: {}", vehicleRegNumber);
                 return;
             }
@@ -153,7 +154,8 @@ public class ParkingService {
             parkingSpot.setAvailable(true);
     
             logger.info("Updating parking spot for spot ID: {}", parkingSpot.getId());
-            if (!parkingSpotDAO.updateParking(parkingSpot)) {
+            boolean parkingUpdated = parkingSpotDAO.updateParking(parkingSpot);
+            if (!parkingUpdated) {
                 logger.error("Failed to update parking spot for spot ID: {}", parkingSpot.getId());
                 return;
             }

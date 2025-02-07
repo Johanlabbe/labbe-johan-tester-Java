@@ -13,7 +13,7 @@ import com.parkit.parkingsystem.model.Ticket;
 public class FareCalculatorService {
     private static final Logger logger = LoggerFactory.getLogger(FareCalculatorService.class);
     
-    public void calculateFare(Ticket ticket, boolean discount) {
+    public void calculateFare(Ticket ticket, boolean isRecurringUser) {
         if (ticket == null) {
             throw new IllegalArgumentException("Ticket is null");
         }
@@ -56,7 +56,7 @@ public class FareCalculatorService {
 
         double price = durationHours * ratePerHour;
 
-        if (discount) {
+        if (isRecurringUser) {
             price *= 0.95; // Réduction de 5 %
             logger.info("Discount applied: 5% for recurring user");
         }
