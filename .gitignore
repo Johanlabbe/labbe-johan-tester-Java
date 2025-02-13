@@ -1,0 +1,63 @@
+# Fichiers de logs
+*.log
+logs/
+*.out
+
+# Fichiers de build
+target/
+out/
+bin/
+build/
+
+# Fichiers de dépendances locales
+*.jar
+*.war
+*.ear
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers de cache
+*.swp
+*.swo
+*.swn
+
+# Fichiers de test et rapports
+test-output/
+surefire-reports/
+jacoco/
+coverage/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.gradle-cache/
+gradle.properties
+
+# Maven
+.mvn/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Docker et autres outils de conteneurisation
+.dockerignore
+docker-compose.override.yml
